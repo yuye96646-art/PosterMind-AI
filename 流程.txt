@@ -1,0 +1,279 @@
+明白，我帮你整理一份可以直接交给 AI 编程工具生成项目的 **完整技术文档**，包括数据库表结构、API接口、页面原型、核心功能逻辑，覆盖你之前所有功能需求。可以直接复制使用。
+
+---
+
+# PosterMind AI - 技术架构 & 数据库 & API & 页面原型 v1.0
+
+---
+
+## 一、系统概览
+
+**系统模块**：
+
+1. **前端**：用户界面，选择风格、输入文字、查看生成海报、微调、下载
+   技术：Next.js + TailwindCSS + Shadcn UI
+
+2. **后端**：业务逻辑、用户系统、风格系统、海报生成管理
+   技术：FastAPI + Python
+
+3. **数据库**：用户信息、海报模板、风格库、历史记录、会员信息
+   技术：PostgreSQL
+
+4. **缓存**：Redis，用于短期存储生成任务状态
+
+5. **AI引擎**：
+
+   * 文案 & Prompt生成：GPT-4o
+   * 图像生成：Stable Diffusion / GPT Image / Flux Kontext
+
+6. **对象存储**：Cloudflare R2 或 AWS S3，用于存储生成的海报图片
+
+---
+
+## 二、数据库表结构
+
+### 1. 用户表 `users`
+
+| 字段               | 类型                  | 描述   |
+| ---------------- | ------------------- | ---- |
+| id               | UUID                | 主键   |
+| username         | varchar(50)         | 用户名  |
+| email            | varchar(100)        | 邮箱   |
+| password_hash    | varchar(255)        | 密码哈希 |
+| role             | enum(user, admin)   | 角色   |
+| membership_level | enum(free, premium) | 会员等级 |
+| created_at       | timestamp           | 注册时间 |
+| updated_at       | timestamp           | 更新时间 |
+
+---
+
+### 2. 海报模板表 `poster_templates`
+
+| 字段              | 类型           | 描述               |
+| --------------- | ------------ | ---------------- |
+| id              | UUID         | 主键               |
+| style_id        | UUID         | 外键，风格表           |
+| template_name   | varchar(100) | 模板名称             |
+| layout_json     | JSON         | 布局数据（文字区域位置、尺寸等） |
+| locked_elements | JSON         | 锁定的核心元素          |
+| created_at      | timestamp    | 创建时间             |
+| updated_at      | timestamp    | 更新时间             |
+
+---
+
+### 3. 风格表 `styles`
+
+| 字段               | 类型                         | 描述              |
+| ---------------- | -------------------------- | --------------- |
+| id               | UUID                       | 主键              |
+| name             | varchar(50)                | 风格名称            |
+| description      | text                       | 风格描述            |
+| font_family      | varchar(50)                | 字体              |
+| primary_color    | varchar(7)                 | 主色              |
+| secondary_color  | varchar(7)                 | 辅助色             |
+| spacing          | enum(small, medium, large) | 间距等级            |
+| allowed_elements | JSON                       | 可用元素类型          |
+| prompt_template  | text                       | AI生成背景的Prompt模板 |
+| created_at       | timestamp                  | 创建时间            |
+| updated_at       | timestamp                  | 更新时间            |
+
+---
+
+### 4. 用户生成历史 `user_posters`
+
+| 字段          | 类型                               | 描述     |
+| ----------- | -------------------------------- | ------ |
+| id          | UUID                             | 主键     |
+| user_id     | UUID                             | 外键     |
+| template_id | UUID                             | 使用模板ID |
+| style_id    | UUID                             | 风格ID   |
+| title       | varchar(200)                     | 用户输入标题 |
+| subtitle    | varchar(200)                     | 副标题    |
+| content     | text                             | 正文     |
+| image_url   | varchar(255)                     | 海报存储地址 |
+| status      | enum(pending, completed, failed) | 生成状态   |
+| created_at  | timestamp                        | 创建时间   |
+| updated_at  | timestamp                        | 更新时间   |
+
+---
+
+### 5. 元素表 `elements`
+
+| 字段         | 类型                                         | 描述               |
+| ---------- | ------------------------------------------ | ---------------- |
+| id         | UUID                                       | 主键               |
+| name       | varchar(50)                                | 元素名称             |
+| type       | enum(circle, square, line, gradient, icon) | 元素类型             |
+| style_id   | UUID                                       | 关联风格             |
+| properties | JSON                                       | 元素属性（颜色、尺寸、透明度等） |
+| created_at | timestamp                                  | 创建时间             |
+| updated_at | timestamp                                  | 更新时间             |
+
+---
+
+### 6. 会员表 `memberships`
+
+| 字段         | 类型                  | 描述   |
+| ---------- | ------------------- | ---- |
+| id         | UUID                | 主键   |
+| user_id    | UUID                | 外键   |
+| level      | enum(free, premium) | 会员等级 |
+| expire_at  | timestamp           | 到期时间 |
+| created_at | timestamp           | 创建时间 |
+| updated_at | timestamp           | 更新时间 |
+
+---
+
+## 三、API接口文档
+
+### 1. 用户注册 / 登录
+
+| Method | URL                | Request                               | Response                    |
+| ------ | ------------------ | ------------------------------------- | --------------------------- |
+| POST   | /api/auth/register | `{username, email, password}`         | `{success, user_id}`        |
+| POST   | /api/auth/login    | `{email, password}`                   | `{success, token, user_id}` |
+| GET    | /api/auth/me       | Header: `Authorization: Bearer token` | `{user info}`               |
+
+---
+
+### 2. 风格接口
+
+| Method | URL              | Request | Response                                    |
+| ------ | ---------------- | ------- | ------------------------------------------- |
+| GET    | /api/styles      | —       | `[{id,name,font_family,primary_color,...}]` |
+| GET    | /api/styles/{id} | —       | `{id,name,font_family,...}`                 |
+
+---
+
+### 3. 模板接口
+
+| Method | URL                 | Request      | Response                                       |
+| ------ | ------------------- | ------------ | ---------------------------------------------- |
+| GET    | /api/templates      | `?style_id=` | `[{id, template_name, layout_json,...}]`       |
+| GET    | /api/templates/{id} | —            | `{id, style_id, layout_json, locked_elements}` |
+
+---
+
+### 4. 海报生成接口
+
+| Method | URL                           | Request                                                      | Response                                                  |
+| ------ | ----------------------------- | ------------------------------------------------------------ | --------------------------------------------------------- |
+| POST   | /api/posters/generate         | `{user_id, style_id, template_id, title, subtitle, content}` | `{task_id, status}`                                       |
+| GET    | /api/posters/status/{task_id} | —                                                            | `{status, image_url}`                                     |
+| GET    | /api/posters/history          | `?user_id=`                                                  | `[{poster_id, title, image_url, style_name, created_at}]` |
+
+---
+
+### 5. 元素管理接口（可选）
+
+| Method | URL                     | Request                           | Response                      |
+| ------ | ----------------------- | --------------------------------- | ----------------------------- |
+| GET    | /api/elements?style_id= | —                                 | `[{id,name,type,properties}]` |
+| POST   | /api/elements           | `{name,type,style_id,properties}` | `{id}`                        |
+
+---
+
+### 6. 会员接口
+
+| Method | URL                       | Request            | Response             |
+| ------ | ------------------------- | ------------------ | -------------------- |
+| GET    | /api/memberships?user_id= | —                  | `{level, expire_at}` |
+| POST   | /api/memberships/upgrade  | `{user_id, level}` | `{success}`          |
+
+---
+
+## 四、页面原型（Web端）
+
+### 1. 首页 / Dashboard
+
+* 风格选择区（下拉 + 图标展示）
+* 海报输入区（标题 / 副标题 / 正文）
+* 生成按钮
+* 历史海报缩略图展示
+* 下载按钮
+
+---
+
+### 2. 海报生成页
+
+* AI生成4个方案
+* 点击切换方案
+* 微调文字（标题、副标题、正文）
+* 微调元素（颜色、数量）
+* 下载 PNG / JPG
+
+---
+
+### 3. 用户中心
+
+* 历史海报列表
+* 会员状态
+* 升级会员按钮
+* 设置个人资料
+
+---
+
+### 4. 管理后台（Admin）
+
+* 风格库管理
+* 模板管理
+* 用户管理
+* 海报生成任务监控
+
+---
+
+## 五、AI生成工作流
+
+1. 用户提交海报信息（文字 + 风格 + 模板）
+2. 系统通过 Prompt Builder 生成 AI 背景生成 Prompt
+3. AI生成背景图
+4. 后端读取模板布局 + 文字渲染规则
+5. 程序渲染文字到背景图上
+6. 存储海报图片
+7. 更新生成状态给前端
+8. 用户微调 & 下载
+
+---
+
+## 六、海报尺寸支持
+
+* Instagram Post：1080x1350
+* Instagram Story：1080x1920
+* X/Twitter Post：1600x900
+* 小红书：1242x1660
+* A4打印：2480x3508
+* 自定义尺寸
+
+---
+
+## 七、MVP功能列表
+
+* 风格选择
+* 模板选择
+* 海报文字输入
+* AI背景生成
+* 自动排版
+* 元素微调
+* 风格锁定
+* 海报下载
+* 历史记录
+* 响应式网页
+
+---
+
+## 八、扩展功能（阶段二）
+
+* 上传参考海报 → AI分析风格 → 自动生成同风格海报
+* 批量生成海报
+* 高级会员功能
+* 团队协作
+* API开放平台
+
+---
+
+## 九、技术栈
+
+| 层  | 技术                                |
+| -- | --------------------------------- |
+| 前端 | Next.js + TailwindCSS + Shadcn UI |
+| 后端 | FastAPI + Python                  |
