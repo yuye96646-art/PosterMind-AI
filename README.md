@@ -122,15 +122,15 @@ PosterMind AI 的目标是让用户通过简单输入快速生成海报。
 
 ```mermaid
 flowchart LR
-    U[用户] --> F[Next.js 前端]
-    F --> A[FastAPI 后端]
-    A --> DB[(SQLite / PostgreSQL)]
-    A --> T[海报生成任务]
-    T --> P[Prompt 组装]
-    T --> G[背景生成]
-    T --> R[海报渲染]
-    T --> S[文件存储]
-    S --> M[/media 或 R2/S3]
+    U["用户"] --> F["Next.js 前端"]
+    F --> A["FastAPI 后端"]
+    A --> DB[("SQLite / PostgreSQL")]
+    A --> T["海报生成任务"]
+    T --> P["Prompt 组装"]
+    T --> G["背景生成"]
+    T --> R["海报渲染"]
+    T --> S["文件存储"]
+    S --> M["/media 或 R2/S3"]
 ```
 
 核心流程：
